@@ -23,8 +23,8 @@ from std_msgs.msg import ColorRGBA, Header, String
 from duckietown_msgs.msg import LEDPattern, WheelsCmdStamped
 
 # ---- change these ----------------------------------------------------------
-SPEED = 0.4         # forward / backward speed, from 0.0 to 1.0
-TURN_SPEED = 0.4    # wheel speed while turning on the spot
+SPEED = 1         # forward / backward speed, from 0.0 to 1.0
+TURN_SPEED = 0.5    # wheel speed while turning on the spot
 
 # command -> (left wheel, right wheel)
 WHEELS = {
