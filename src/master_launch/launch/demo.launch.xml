@@ -1,0 +1,20 @@
+<launch>
+
+    <!-- Everything at once: drive with the arrow keys while the camera saves
+         pictures.
+
+         Run it with:  ros2 launch master_launch demo.launch.xml
+
+         The blinker node is on purpose NOT started here. It publishes to the
+         same /led_pattern topic as the robot node, so the two would fight
+         over the LEDs and the colors would flicker. Two publishers on one
+         topic is allowed in ROS2, but the last message always wins.        -->
+
+    <arg name="user" default="$(env USER_NAME)"/>
+
+    <include file="$(find-pkg-share control_room)/launch/launch.xml"/>
+    <include file="$(find-pkg-share robot)/launch/launch.xml"/>
+
+    <node pkg="camera" exec="camera.py" name="camera_$(var user)" output="screen"/>
+
+</launch>

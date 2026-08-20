@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# ROS2 / colcon
+build/
+install/
+log/
+*.log
+
+# Docker
+*.dockerignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+
+# Runtime logs
+*_logs.txt
+movement_logs.txt
+
+# Pictures saved by the camera node
+images/
+
+# --- personal SFTP config (contains your robot number and key path) --------
+# Copy sftp.json.example to .vscode/sftp.json and edit it for yourself.
+# (technically already covered by .vscode/ above, kept for documentation)
+.vscode/sftp.json
+
+# --- personal Makefile overrides -------------------------------------------
+local.mk

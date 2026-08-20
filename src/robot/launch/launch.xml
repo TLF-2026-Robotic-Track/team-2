@@ -1,0 +1,11 @@
+<launch>
+
+    <!-- The node reads VEHICLE_NAME and USER_NAME from the environment.
+         USER_NAME is used here only to give the node a unique name, so that
+         several people can run their own robot node at the same time. -->
+    <arg name="user" default="$(env USER_NAME)"/>
+
+    <node pkg="robot" exec="main.py" name="robot_$(var user)"
+          output="screen"/>
+
+</launch>

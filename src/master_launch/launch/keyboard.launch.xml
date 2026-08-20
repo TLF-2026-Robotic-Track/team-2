@@ -1,0 +1,12 @@
+<launch>
+
+    <!-- Starts the two nodes you need to drive with the arrow keys:
+           control_room  reads the keyboard
+           robot         drives the wheels and the LEDs
+
+         Run it with:  ros2 launch master_launch keyboard.launch.xml       -->
+
+    <include file="$(find-pkg-share control_room)/launch/launch.xml"/>
+    <include file="$(find-pkg-share robot)/launch/launch.xml"/>
+
+</launch>

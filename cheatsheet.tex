@@ -1,0 +1,378 @@
+% Build: tectonic -X compile cheatsheet.tex
+% Duckiebot / ROS2 Humble command cheat sheet. Two pages, two columns.
+\documentclass[10pt,a4paper]{extarticle}
+
+\usepackage{fontspec}
+\setmainfont{texgyrepagella-regular.otf}[
+  BoldFont=texgyrepagella-bold.otf,
+  ItalicFont=texgyrepagella-italic.otf,
+  BoldItalicFont=texgyrepagella-bolditalic.otf]
+\setsansfont{texgyreheros-regular.otf}[
+  BoldFont=texgyreheros-bold.otf,
+  ItalicFont=texgyreheros-italic.otf,
+  Scale=0.94]
+\setmonofont{texgyrecursor-regular.otf}[
+  BoldFont=texgyrecursor-bold.otf, Scale=0.90]
+
+\usepackage[margin=1.0cm,top=1.0cm,bottom=1.35cm]{geometry}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fvextra}
+\usepackage{multicol}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- colors (same family as duckiebot-launch-guide) ----------
+\definecolor{accent}{HTML}{1F5C8B}
+\definecolor{accentd}{HTML}{14405F}
+\definecolor{dim}{HTML}{4A4A4A}
+\definecolor{danger}{HTML}{A6371F}
+\definecolor{dangerbg}{HTML}{FDF0EC}
+\definecolor{robotc}{HTML}{7A5100}
+\definecolor{codeframe}{HTML}{C9D3DC}
+
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent}
+
+% ---------- page furniture ----------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.3pt}
+\fancyfoot[L]{\scriptsize\sffamily\color{dim}\texttt{VEHICLE\_NAME} says \textbf{which} robot.
+  \texttt{USER\_NAME} says \textbf{whose} keyboard.}
+\fancyfoot[R]{\scriptsize\sffamily\color{dim}\textbf{\thepage/\pageref{LastPage}}}
+
+% ---------- section box ----------
+\newtcolorbox{sect}[1]{
+  colback=white, colframe=accent!55, boxrule=0.5pt, arc=2pt,
+  left=4pt, right=4pt, top=3.5pt, bottom=3.5pt,
+  before upper={\raggedright},
+  title={\sffamily\bfseries\small #1}, coltitle=white, colbacktitle=accent,
+  toptitle=1.4pt, bottomtitle=1.4pt,
+  before skip=4pt, after skip=4pt}
+
+\newtcolorbox{stopbox}{
+  colback=dangerbg, colframe=danger, boxrule=1.4pt, arc=2pt,
+  left=5pt, right=5pt, top=4pt, bottom=4pt,
+  before upper={\raggedright},
+  title={\sffamily\bfseries\normalsize EMERGENCY STOP}, coltitle=white,
+  colbacktitle=danger, toptitle=2.5pt, bottomtitle=2.5pt,
+  before skip=2pt, after skip=6pt}
+
+% ---------- code ----------
+\newcommand{\code}[1]{\textcolor{accentd}{\texttt{#1}}}
+\newcommand{\key}[1]{\textcolor{robotc}{\texttt{\textbf{#1}}}}
+
+% one entry: command, then one short line of what it does
+\newcommand{\ce}[2]{\par\hangindent=1.1em\hangafter=1
+  \code{#1}\,\textcolor{dim}{\small\textemdash\ #2}\par\vspace{0.5pt}}
+% plain one-line note
+\newcommand{\nt}[1]{\par\hangindent=1.1em\hangafter=1
+  \textcolor{dim}{\small #1}\par\vspace{0.5pt}}
+% troubleshooting entry: symptom, then the fix on the next line
+\newcommand{\fx}[2]{\par\vspace{2pt}\hangindent=1.1em\hangafter=1
+  \textcolor{danger}{#1}\par\hangindent=1.5em\hangafter=0
+  \hspace*{0.5em}\textcolor{danger}{$\rightarrow$}\ #2\par}
+% small bold label inside a box
+\newcommand{\lab}[1]{\par\vspace{2pt}{\sffamily\bfseries\small\color{accent}#1}\par\vspace{1pt}}
+
+% long commands: verbatim, wraps, accent rule on the left
+\DefineVerbatimEnvironment{cmd}{Verbatim}{
+  fontsize=\small, breaklines=true, breakbefore={/},
+  breakbeforesymbolpre={}, breaksymbolleft={}, breakindent=1.2em,
+  frame=leftline, framerule=1.1pt, rulecolor=\color{accent!45},
+  framesep=4pt, xleftmargin=3pt, formatcom=\color{accentd}}
+
+\DefineVerbatimEnvironment{cmdred}{Verbatim}{
+  fontsize=\small, breaklines=true, breakbefore={/},
+  breakbeforesymbolpre={}, breaksymbolleft={}, breakindent=1.2em,
+  frame=leftline, framerule=1.4pt, rulecolor=\color{danger},
+  framesep=4pt, xleftmargin=3pt, formatcom=\color{danger}}
+
+\setstretch{1.04}
+\setlength{\columnsep}{6mm}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.1em, itemsep=0pt, topsep=1pt, parsep=0pt}
+\emergencystretch=3em
+\hbadness=10000
+\tolerance=3000
+
+% =====================================================================
+\begin{document}
+
+\begin{center}
+{\sffamily\bfseries\Large\color{accent} Duckiebot Command Cheat Sheet}\\[2pt]
+{\sffamily\footnotesize\color{dim} SSH \ $|$ \ Linux \ $|$ \ scp \ $|$ \ git \ $|$ \ make \ $|$ \ ROS2 Humble \ $|$ \ tmux \ $|$ \ Docker}\\[3pt]
+{\footnotesize Replace \code{duckieXX} with the number written on your robot. Replace \code{yournick} with your own nickname.}
+\end{center}
+\vspace{2pt}
+{\color{accent!55}\hrule height 0.8pt}
+\vspace{4pt}
+
+\begin{multicols}{2}
+\raggedcolumns
+
+% ---------------------------------------------------------------- STOP
+\begin{stopbox}
+{\bfseries Robot running away?} Open any shell in the container and run:
+\begin{cmdred}
+ros2 topic pub --once /duckieXX/wheels_cmd duckietown_msgs/msg/WheelsCmdStamped "{vel_left: 0.0, vel_right: 0.0}"
+\end{cmdred}
+\vspace{2pt}
+\nt{\key{Ctrl+C} stops the node you are looking at, nothing else.}
+\nt{\key{space} stops the robot while you are driving with the keyboard.}
+\end{stopbox}
+
+% ---------------------------------------------------------------- 1
+\begin{sect}{1 \ Connect to the robot}
+\begin{cmd}
+ssh duckie@duckieXX.local
+\end{cmd}
+\nt{Password: \code{quackquack}. \code{XX} = the number written on the robot.}
+\end{sect}
+
+\begin{sect}{VS Code shortcuts}
+\nt{mac: \key{Cmd} instead of \key{Ctrl}.}
+\ce{Ctrl+S}{save; with SFTP this is what uploads the file to the robot}
+\ce{Ctrl+Shift+P}{command palette (this is how you reach "SFTP: Config")}
+\ce{Ctrl+Shift+X}{extensions}
+\ce{Ctrl+P}{open a file by name}
+\ce{Ctrl+Shift+F}{search across all files}
+\ce{Ctrl+G}{go to line}
+\ce{Ctrl+L}{select the current line}
+\ce{Ctrl+D}{select the next occurrence of the same word}
+\ce{Ctrl+/}{comment or uncomment}
+\ce{Alt+Up / Alt+Down}{move the line up or down}
+\ce{Ctrl+Shift+K}{delete the line}
+\ce{F2}{rename everywhere}
+\ce{Ctrl+`}{show or hide the built-in terminal}
+\ce{Ctrl+B}{show or hide the sidebar}
+\nt{\key{Ctrl+B} in VS Code toggles the sidebar. Inside tmux, \key{Ctrl+B} is the tmux prefix. Different things.}
+\end{sect}
+
+% ---------------------------------------------------------------- 2
+\begin{sect}{2 \ SSH keys: stop typing the password}
+\lab{GENERATE --- Windows PowerShell}
+\begin{cmd}
+ssh-keygen -t ed25519 -f .ssh/nickname -C "nickname"
+\end{cmd}
+\lab{GENERATE --- mac / Linux}
+\begin{cmd}
+ssh-keygen -t ed25519 -f ~/.ssh/nickname -C nickname
+\end{cmd}
+\lab{COPY}
+\begin{cmd}
+scp .ssh/nickname.pub duckie@duckieXX.local:~/.ssh/nickname.pub
+\end{cmd}
+\lab{APPLY}
+\begin{cmd}
+ssh duckie@duckieXX.local "(echo; cat ~/.ssh/nickname.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && rm ~/.ssh/nickname.pub"
+\end{cmd}
+\lab{CHECK --- must log in with no password}
+\begin{cmd}
+ssh -i .ssh/nickname duckie@duckieXX.local
+\end{cmd}
+\vspace{2pt}
+\nt{mac / Linux: \code{ssh-copy-id -i \textasciitilde/.ssh/nickname.pub duckie@duckieXX.local} does COPY + APPLY in one command.}
+\nt{Only the \code{.pub} (public) file ever leaves your computer.}
+\end{sect}
+
+% ---------------------------------------------------------------- 3
+\begin{sect}{3 \ Linux shell basics}
+\ce{pwd}{where am I}
+\ce{ls}{list files here}
+\ce{cd folder}{go into a folder}
+\ce{cd ..}{go one folder up}
+\ce{cat file}{print a file}
+\ce{mkdir folder}{new folder}
+\ce{touch file}{new empty file}
+\ce{rm file}{delete a file}
+\ce{rm -r folder}{delete a folder with everything in it}
+\ce{chmod +x script.sh}{make a script runnable}
+\ce{ls | grep .py}{filter the output, keep lines with \texttt{.py}}
+\ce{nano file}{edit: save = \key{Ctrl+O}, \key{Enter}; exit = \key{Ctrl+X}}
+\ce{micro file}{editor with normal \key{Ctrl+S} / \key{Ctrl+C} / \key{Ctrl+V}; save = \key{Ctrl+S}, exit = \key{Ctrl+Q}}
+\nt{\code{micro} is not installed by default: add \code{micro} to \code{requirements-apt.txt} and \code{make build}, or on the robot itself \code{sudo apt install micro}.}
+\nt{\key{Ctrl+C} = stop the running program. \key{Tab} = complete the name. \key{arrow up} = previous command.}
+\end{sect}
+
+% ---------------------------------------------------------------- 4
+\begin{sect}{4 \ Copy files --- run these ON YOUR COMPUTER}
+\begin{cmd}
+scp myfile.py duckie@duckieXX.local:~/DuckieExamples/
+\end{cmd}
+\nt{Send one file to the robot.}
+\begin{cmd}
+scp -rp src/. duckie@duckieXX.local:~/DuckieExamples/src/
+\end{cmd}
+\nt{Send a whole folder. The \code{/.} matters: without it you get \code{src/src} once the folder already exists there.}
+\begin{cmd}
+scp 'duckie@duckieXX.local:~/DuckieExamples/images/*.jpg' .
+\end{cmd}
+\nt{Get the pictures. The quotes matter: they stop your own shell expanding \code{*}.}
+\begin{cmd}
+./get_images.sh duckieXX
+\end{cmd}
+\nt{Same thing, script in the repo.}
+\end{sect}
+
+% ---------------------------------------------------------------- 5
+\begin{sect}{5 \ git}
+\ce{git config --global user.name "Your Name"}{once, before your first commit}
+\ce{git config --global user.email "you@example.com"}{once, same}
+\ce{git clone <url>}{download the repo}
+\ce{git pull}{get the newest changes}
+\ce{git status}{what did I change}
+\ce{git add .}{stage all changes}
+\ce{git commit -m "message"}{save a snapshot}
+\ce{git push}{upload your commits}
+\nt{Clone on the robot with the HTTPS url. You cannot \code{push} from the robot that way --- push from your own computer.}
+\end{sect}
+
+\begin{sect}{git: history and branches}
+\ce{git log --oneline}{history, one line per commit}
+\ce{git diff}{show the changes line by line}
+\ce{git branch}{list branches}
+\ce{git switch -c feature-x}{create a branch and switch to it}
+\ce{git switch main}{switch to an existing branch}
+\ce{git merge feature-x}{merge a branch into the current one}
+\ce{git stash}{put your changes aside so you can \code{git pull}}
+\ce{git stash pop}{bring them back afterwards}
+\nt{Simplest rule: commit before you pull, then you never need \code{stash}.}
+\end{sect}
+
+\begin{sect}{.gitignore}
+\ce{.gitignore}{one pattern per line; matching files are never committed}
+\ce{echo ".env" >> .gitignore}{start ignoring a file}
+\ce{git rm --cached .env}{stop tracking it, keeps the file on disk}
+\ce{git commit -m "untrack .env"}{record it}
+\nt{\code{.gitignore} only affects files git is not already tracking: something already committed stays tracked until you \code{git rm --cached} it.}
+\end{sect}
+
+% ---------------------------------------------------------------- 6
+\begin{sect}{6 \ The project, on the robot}
+\ce{export VEHICLE\_NAME=duckieXX}{the robot's own name, part of every topic name}
+\ce{export USER\_NAME=yournick}{letters, digits and \code{\_} only: no dashes, no Cyrillic}
+\vspace{2pt}
+\ce{make build}{build the image and the workspace}
+\ce{make run}{start the container and open a shell in it}
+\ce{make shell}{one more shell in the same container}
+\ce{make down}{stop and delete the container}
+\ce{make clean}{delete \code{build/ install/ log/}}
+\nt{After editing a \code{.py} or a launch file you do \textbf{not} rebuild --- just restart the node.}
+\nt{\code{make build} only after adding or renaming files, or changing \code{setup.py} / \code{package.xml} / requirements.}
+\end{sect}
+
+% ---------------------------------------------------------------- 7
+\begin{sect}{7 \ Run the examples (inside the container)}
+\ce{ros2 run blinker blinker.py}{LEDs cycle red, green, blue}
+\ce{ros2 run camera camera.py}{saves pictures into \code{images/}}
+\ce{ros2 run robot main.py}{movements: turns commands into wheel and LED commands}
+\ce{ros2 run control\_room main.py}{reads the arrow keys}
+\ce{ros2 launch master\_launch keyboard.launch.xml}{control\_room + robot together}
+\ce{ros2 launch master\_launch demo.launch.xml}{the same, plus the camera}
+\end{sect}
+
+\begin{sect}{Driving keys (keyboard control)}
+{
+\begin{tabularx}{\linewidth}{@{}l@{\ }>{\raggedright\arraybackslash}X@{\ }l@{\ }>{\raggedright\arraybackslash}X@{}}
+\key{$\uparrow$} / \key{w} & forward  & \key{$\downarrow$} / \key{s} & backward \\
+\key{$\leftarrow$} / \key{a} & turn left & \key{$\rightarrow$} / \key{d} & turn right \\
+\key{space} & stop & \key{1 2 3} & LEDs red / green / blue \\
+\key{0} & LEDs white & \key{q} & quit and stop the robot \\
+\end{tabularx}}
+\end{sect}
+
+% ---------------------------------------------------------------- 8
+\begin{sect}{8 \ Look inside ROS2}
+\ce{ros2 topic list}{all topics on the network}
+\ce{ros2 node list}{all running nodes}
+\ce{ros2 topic info <topic>}{type of the topic, who publishes, who listens}
+\ce{ros2 topic echo <topic>}{watch whatever is published}
+\ce{ros2 topic echo --once <topic>}{one message instead of a flood}
+\ce{ros2 topic pub <topic> <type> "<yaml>"}{publish repeatedly}
+\ce{ros2 topic pub --once <topic> <type> "<yaml>"}{publish a single message}
+\vspace{2pt}
+{\sffamily\bfseries\small\color{accent}Try it in two panes, no robot needed}\par\vspace{1pt}
+\begin{cmd}
+pane 1:  ros2 topic echo /hello
+pane 2:  ros2 topic pub /hello std_msgs/msg/String "{data: 'hi'}"
+\end{cmd}
+\end{sect}
+
+\begin{sect}{Robot topics (\texttt{/duckieXX/...}) and driving with no code}
+\ce{image/compressed}{camera}
+\ce{range}{distance sensor}
+\ce{tick}{wheel encoders}
+\ce{wheels\_cmd}{wheel commands}
+\ce{led\_pattern}{LEDs}
+\ce{emergency\_stop}{emergency stop}
+\ce{temperature}{temperature}
+\vspace{2pt}
+{\sffamily\bfseries\small\color{accent}Drive with no code at all}\par\vspace{1pt}
+\begin{cmd}
+ros2 topic pub --once /duckieXX/wheels_cmd duckietown_msgs/msg/WheelsCmdStamped "{vel_left: 0.4, vel_right: 0.4}"
+\end{cmd}
+\nt{Wheel speeds go from \code{-1.0} to \code{1.0}; positive is forward, \code{0.0} stops.}
+\vspace{1pt}
+{\sffamily\bfseries\small\color{accent}All LEDs red with no code}\par\vspace{1pt}
+\begin{cmd}
+ros2 topic pub --once /duckieXX/led_pattern duckietown_msgs/msg/LEDPattern "{rgb_vals: [{r: 1.0, a: 1.0}, {r: 1.0, a: 1.0}, {r: 1.0, a: 1.0}, {r: 1.0, a: 1.0}, {r: 1.0, a: 1.0}]}"
+\end{cmd}
+\end{sect}
+
+% ---------------------------------------------------------------- 9
+\begin{sect}{9 \ tmux: keep programs running after you disconnect}
+\ce{tmux new -s name}{new session}
+\ce{tmux ls}{list sessions}
+\ce{tmux attach -t name}{go back into a session}
+\ce{tmux kill-session -t name}{delete a session}
+\end{sect}
+
+\begin{sect}{tmux: press \texttt{Ctrl+B}, release, then}
+\ce{d}{detach, everything keeps running}
+\ce{c}{new window}
+\ce{n / p}{next / previous window}
+\ce{<number>}{go to that window}
+\ce{w}{list windows}
+\ce{\%}{split left / right}
+\ce{"}{split top / bottom}
+\ce{arrows}{move between panes}
+\ce{[}{scroll back through output: arrows and \key{PgUp} move, \key{q} exits}
+\ce{x then y}{kill the PANE}
+\ce{\& then y}{kill the WINDOW}
+\end{sect}
+
+% ---------------------------------------------------------------- 10
+\begin{sect}{10 \ Docker}
+\ce{docker ps}{running containers}
+\ce{docker ps -a}{all containers, stopped ones too}
+\ce{docker images}{images on this machine}
+\ce{docker logs -f <name>}{follow the output of a container}
+\ce{docker exec -it <name> bash}{shell inside a running container}
+\ce{docker start <name>}{start a stopped container}
+\ce{docker stop <name>}{stop it}
+\ce{docker rm -f <name>}{delete it}
+\nt{\code{docker run} takes an \textbf{image}, \code{docker start} takes an existing \textbf{container}.}
+\nt{Your container is called \code{duckiebot}. The whole team shares it.}
+\end{sect}
+
+% ---------------------------------------------------------------- 11
+\begin{sect}{11 \ When it does not work}
+\fx{\texttt{ros2: command not found}}{\code{source /opt/ros/humble/setup.bash}}
+\fx{\texttt{Package 'blinker' not found}}{not built or not sourced: \code{make build}, then \code{source install/local\_setup.bash}}
+\fx{\texttt{can't open file \_local\_setup\_util\_sh.py}}{\code{source install/local\_setup.bash} --- \textbf{not} \code{install/setup.bash}}
+\fx{\texttt{VEHICLE\_NAME is not set}}{export it again: every new shell needs it}
+\fx{\texttt{ros2 topic list} shows nothing from the robot}{use \code{make run}, not your own \code{docker run}}
+\fx{Edited a \texttt{.py} but nothing changed}{restart the node. If it still looks old, it may be an SFTP problem: check the file content on the robot with \code{cat}}
+\fx{Nodes start, robot does not move}{\code{ros2 topic echo /duckieXX/wheels\_cmd} to see if commands arrive; check battery and emergency stop}
+\fx{LEDs flicker or ignore you}{two nodes publish to \code{led\_pattern}: stop \code{blinker} while driving}
+\end{sect}
+
+\end{multicols}
+
+\end{document}
