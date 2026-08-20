@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # One line per node. Add another line if you add another node file.
-        ('lib/' + package_name, ['camera/camera.py']),
+        ('lib/' + package_name, ['camera/camera.py', 'camera/color_detector.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
