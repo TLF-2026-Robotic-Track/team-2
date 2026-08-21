@@ -30,7 +30,7 @@ class Blinker(Node):
             LEDPattern, f'/{vehicle_name}/led_pattern', 1)
         self.command_subscription = self.create_subscription(
             String,
-            f'/{user}/{vehicle_name}/${topic_name}',
+            f'/{user}/{vehicle_name}/{topic_name}',
             self.on_command,
             10,
         )
