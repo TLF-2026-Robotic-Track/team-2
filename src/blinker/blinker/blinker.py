@@ -30,12 +30,12 @@ class Blinker(Node):
             LEDPattern, f'/{vehicle_name}/led_pattern', 1)
         self.command_subscription = self.create_subscription(
             String,
-            f'/{user}/{vehicle_name}/{topic_name}',
+            f'/{vehicle_name}/{topic_name}',
             self.on_command,
             10,
         )
         self.publish_color(no_event)
-        self.get_logger().info(f'Waiting for an event on {user}/{vehicle_name}/command')
+        self.get_logger().info(f'Waiting for an event on /{vehicle_name}/{topic_name}')
 
     def on_command(self, msg):
         event=msg.data
