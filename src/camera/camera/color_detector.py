@@ -22,7 +22,6 @@ from duckietown_msgs.msg import WheelsCmdStamped
 P = 2.0
 I = 0.05
 D = 0.25
-P_FORWARD = 0.08
 SETPOINT_X = 0.5
 CENTER_TOLERANCE = 0.05
 BASE_SPEED = 0.50
@@ -30,7 +29,6 @@ MAX_MOTOR_SPEED = 1.0
 SEARCH_TURN_SPEED = 0.5
 TARGET_MIN_AREA = 200
 FINISH_AREA_PERCENT = 40.0
-FAR_AREA_PERCENT = 5.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -92,7 +90,8 @@ class ColorDetector(Node):
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
-            f'P={P}, I={I}, D={D}, forward P={P_FORWARD}, finish area={FINISH_AREA_PERCENT}%'
+            f'P={P}, I={I}, D={D}, base speed={BASE_SPEED}, '
+            f'finish area={FINISH_AREA_PERCENT}%'
         )
 
     def _build_mask(self, hsv_image):
@@ -153,25 +152,21 @@ class ColorDetector(Node):
         self.integral = 0.0
         self.last_time = None
 
-    def distance_pid(self, area_percent):
-        distance_gap = max(0.0, FAR_AREA_PERCENT - area_percent)
-        return min(MAX_MOTOR_SPEED, P_FORWARD * distance_gap)
-
     def moving_to_color(self, x_center_norm, area_percent):
         error = SETPOINT_X - x_center_norm
         turn_correction = 0.0
         if abs(error) > CENTER_TOLERANCE:
             turn_correction = self.pid(x_center_norm)
 
-        forward_speed = self.distance_pid(area_percent)
-
         if area_percent >= FINISH_AREA_PERCENT:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
 
-        left_speed = forward_speed - turn_correction
-        right_speed = forward_speed + turn_correction
+        # Approach at constant base speed; only the steering PID changes the
+        # left/right balance.
+        left_speed = BASE_SPEED - turn_correction
+        right_speed = BASE_SPEED + turn_correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
@@ -241,6 +236,8 @@ def main():
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        if rclpy.ok():
+            node.publish_wheels(0.0, 0.0)
         node.destroy_node()
         rclpy.try_shutdown()
 
