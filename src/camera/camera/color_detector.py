@@ -7,6 +7,7 @@ inverse PID output. If no target is found, both motors stop.
 """
 
 import os
+import math
 
 import cv2
 import numpy as np
@@ -106,6 +107,10 @@ class ColorDetector(Node):
             FORWARD_PULSE_PERIOD_S,
             self.start_forward_pulse,
         )
+        self.distance_safety_timer = self.create_timer(
+            0.05,
+            self.enforce_distance_stop,
+        )
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
@@ -136,6 +141,10 @@ class ColorDetector(Node):
         self.led_pub.publish(msg)
 
     def publish_wheels(self, left_speed, right_speed):
+        if self.distance_is_close():
+            left_speed = 0.0
+            right_speed = 0.0
+
         msg = WheelsCmdStamped()
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
@@ -153,7 +162,17 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
 
     def distance_is_close(self):
-        return self.distance_m is not None and self.distance_m <= STOP_DISTANCE_M
+        return (
+            self.distance_m is not None
+            and math.isfinite(self.distance_m)
+            and self.distance_m <= STOP_DISTANCE_M
+        )
+
+    def enforce_distance_stop(self):
+        if self.distance_is_close():
+            self.forward_pulse_until = 0.0
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
 
     def start_forward_pulse(self):
         if not self.distance_is_close():
@@ -178,11 +197,13 @@ class ColorDetector(Node):
         return output
 
     def no_color(self):
-        self.publish_blob(0.0, 0.0, 0.0)
-        self.publish_led_state('nan')
         if self.distance_is_close():
+            self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
+
+        self.publish_blob(0.0, 0.0, 0.0)
+        self.publish_led_state('nan')
         # Search only clockwise to avoid the rapid left/right oscillation.
         self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
         self.last_error = 0.0
