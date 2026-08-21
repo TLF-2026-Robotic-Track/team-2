@@ -21,7 +21,7 @@ COLORS = [
 
 # The Duckiebot has 5 LED slots, in this order:
 #   0 left front, 1 right rear, 2 right front, 3 unused, 4 left rear
-LED_COUNT = 5
+LED_COUNT = 4
 
 
 class Blinker(Node):
