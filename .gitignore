@@ -50,3 +50,4 @@ images/
 
 # --- personal Makefile overrides -------------------------------------------
 local.mk
+images_from_duckie05

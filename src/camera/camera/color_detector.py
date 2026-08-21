@@ -110,16 +110,16 @@ class ColorDetector(Node):
         area_px = cv2.contourArea(largest)
         image_area = frame.shape[0] * frame.shape[1]
 
-        if area_px < TARGET_MIN_AREA:
-            self.publish_result(0.0, 0.0, 0.0)
-            return
+        #if area_px < TARGET_MIN_AREA:
+        #    self.publish_result(0.0, 0.0, 0.0)
+        #    return
 
         x, y, w, h = cv2.boundingRect(largest)
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
         area_ratio = area_px / max(image_area, 1)
 
-        self.publish_result(x_center_norm, area_ratio, 1.0)
+        self.publish_result(x_center_norm, area_ratio*100, 1.0)
 
 
 def main():
