@@ -22,10 +22,15 @@ from duckietown_msgs.msg import WheelsCmdStamped
 P = 2.0
 I = 0.05
 D = 0.25
+P_FORWARD = 0.08
 SETPOINT_X = 0.5
-BASE_SPEED = 0.25
+CENTER_TOLERANCE = 0.05
+BASE_SPEED = 0.20
 MAX_MOTOR_SPEED = 0.9
+SEARCH_TURN_SPEED = 0.18
 TARGET_MIN_AREA = 200
+FINISH_AREA_PERCENT = 40.0
+FAR_AREA_PERCENT = 15.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -84,10 +89,11 @@ class ColorDetector(Node):
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
+        self.search_direction = 1.0
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
-            f'P={P}, I={I}, D={D}, setpoint={SETPOINT_X}'
+            f'P={P}, I={I}, D={D}, forward P={P_FORWARD}, finish area={FINISH_AREA_PERCENT}%'
         )
 
     def _build_mask(self, hsv_image):
@@ -141,28 +147,46 @@ class ColorDetector(Node):
 
     def no_color(self):
         self.publish_blob(0.0, 0.0, 0.0)
-        self.publish_wheels(0.0, 0.0)
         self.publish_led_state('nan')
+        self.publish_wheels(
+            SEARCH_TURN_SPEED * self.search_direction,
+            -SEARCH_TURN_SPEED * self.search_direction,
+        )
+        self.search_direction *= -1.0
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
 
-    def moving_to_color(self, x_center_norm):
-        correction = self.pid(x_center_norm)
-        left_speed = BASE_SPEED - correction
-        right_speed = BASE_SPEED + correction
+    def distance_pid(self, area_percent):
+        distance_gap = max(0.0, FAR_AREA_PERCENT - area_percent)
+        return min(MAX_MOTOR_SPEED, P_FORWARD * distance_gap)
+
+    def moving_to_color(self, x_center_norm, area_percent):
+        error = SETPOINT_X - x_center_norm
+        turn_correction = 0.0
+        if abs(error) > CENTER_TOLERANCE:
+            turn_correction = self.pid(x_center_norm)
+
+        forward_speed = self.distance_pid(area_percent)
+
+        if area_percent >= FINISH_AREA_PERCENT:
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+            return
+
+        left_speed = forward_speed + turn_correction
+        right_speed = forward_speed - turn_correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
 
-        self.publish_wheels(left_speed, right_speed)
-
-        centered = abs(x_center_norm - SETPOINT_X) < 0.05
-        if centered:
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
-        else:
+        if abs(error) <= CENTER_TOLERANCE and area_percent < FINISH_AREA_PERCENT:
             self.publish_led_state('bottle')
+            self.publish_wheels(left_speed, right_speed)
+            return
+
+        self.publish_led_state('bottle')
+        self.publish_wheels(left_speed, right_speed)
 
     def on_image(self, msg):
         try:
@@ -197,14 +221,16 @@ class ColorDetector(Node):
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
         area_ratio = area_px / image_area
+        area_percent = area_ratio * 100.0
 
         self.publish_blob(x_center_norm, area_ratio, 1.0)
 
-        # (false,false) = no color found
-        # (false,true) = sees color and is going to it
-        # (true,false) = object found / centered
-        # (true,true) = anything else
-        self.moving_to_color(x_center_norm)
+        if area_percent >= FINISH_AREA_PERCENT:
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+            return
+
+        self.moving_to_color(x_center_norm, area_percent)
 
 
 def main():
