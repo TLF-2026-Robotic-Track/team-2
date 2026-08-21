@@ -13,7 +13,7 @@ import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import CompressedImage, Range
 from std_msgs.msg import Float32MultiArray, Header, String
 
 from duckietown_msgs.msg import WheelsCmdStamped
@@ -28,7 +28,9 @@ BASE_SPEED = 0.50
 MAX_MOTOR_SPEED = 1.0
 SEARCH_TURN_SPEED = 0.5
 TARGET_MIN_AREA = 200
-FINISH_AREA_PERCENT = 40.0
+STOP_DISTANCE_M = 0.05
+FORWARD_PULSE_PERIOD_S = 3.0
+FORWARD_PULSE_DURATION_S = 0.25
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -62,6 +64,11 @@ class ColorDetector(Node):
     def __init__(self, vehicle_name):
         super().__init__('color_detector')
 
+        distance_topic = os.environ.get(
+            'DISTANCE_TOPIC',
+            f'/{vehicle_name}/front_center_tof_driver_node/range',
+        )
+
         self.blob_pub = self.create_publisher(
             Float32MultiArray,
             f'/{vehicle_name}/color_blob',
@@ -83,15 +90,27 @@ class ColorDetector(Node):
             self.on_image,
             10,
         )
+        self.distance_subscription = self.create_subscription(
+            Range,
+            distance_topic,
+            self.on_distance,
+            10,
+        )
 
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
+        self.distance_m = None
+        self.forward_pulse_until = 0.0
+        self.forward_pulse_timer = self.create_timer(
+            FORWARD_PULSE_PERIOD_S,
+            self.start_forward_pulse,
+        )
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
             f'P={P}, I={I}, D={D}, base speed={BASE_SPEED}, '
-            f'finish area={FINISH_AREA_PERCENT}%'
+            f'stop distance={STOP_DISTANCE_M}m, distance topic={distance_topic}'
         )
 
     def _build_mask(self, hsv_image):
@@ -126,6 +145,21 @@ class ColorDetector(Node):
         msg.vel_right = float(right_speed)
         self.wheels_pub.publish(msg)
 
+    def on_distance(self, msg):
+        self.distance_m = msg.range
+        if self.distance_is_close():
+            self.forward_pulse_until = 0.0
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+
+    def distance_is_close(self):
+        return self.distance_m is not None and self.distance_m <= STOP_DISTANCE_M
+
+    def start_forward_pulse(self):
+        if not self.distance_is_close():
+            now = self.get_clock().now().nanoseconds * 1e-9
+            self.forward_pulse_until = now + FORWARD_PULSE_DURATION_S
+
     def pid(self, x_center_norm):
         error = SETPOINT_X - x_center_norm
         now = self.get_clock().now().nanoseconds * 1e-9
@@ -146,27 +180,33 @@ class ColorDetector(Node):
     def no_color(self):
         self.publish_blob(0.0, 0.0, 0.0)
         self.publish_led_state('nan')
+        if self.distance_is_close():
+            self.publish_wheels(0.0, 0.0)
+            return
         # Search only clockwise to avoid the rapid left/right oscillation.
         self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
 
-    def moving_to_color(self, x_center_norm, area_percent):
+    def moving_to_color(self, x_center_norm):
+        if self.distance_is_close():
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+            return
+
         error = SETPOINT_X - x_center_norm
         turn_correction = 0.0
         if abs(error) > CENTER_TOLERANCE:
             turn_correction = self.pid(x_center_norm)
 
-        if area_percent >= FINISH_AREA_PERCENT:
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
-            return
-
-        # Approach at constant base speed; only the steering PID changes the
-        # left/right balance.
-        left_speed = BASE_SPEED - turn_correction
-        right_speed = BASE_SPEED + turn_correction
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if now < self.forward_pulse_until:
+            left_speed = BASE_SPEED
+            right_speed = BASE_SPEED
+        else:
+            left_speed = BASE_SPEED - turn_correction
+            right_speed = BASE_SPEED + turn_correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
@@ -212,16 +252,15 @@ class ColorDetector(Node):
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
         area_ratio = area_px / image_area
-        area_percent = area_ratio * 100.0
 
         self.publish_blob(x_center_norm, area_ratio, 1.0)
 
-        if area_percent >= FINISH_AREA_PERCENT:
+        if self.distance_is_close():
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
 
-        self.moving_to_color(x_center_norm, area_percent)
+        self.moving_to_color(x_center_norm)
 
 
 def main():
