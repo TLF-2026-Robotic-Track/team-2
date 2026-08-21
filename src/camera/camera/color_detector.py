@@ -211,11 +211,6 @@ class ColorDetector(Node):
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
 
-        if abs(error) <= CENTER_TOLERANCE and area_percent < FINISH_AREA_PERCENT:
-            self.publish_led_state('bottle')
-            self.publish_wheels(left_speed, right_speed)
-            return
-
         self.publish_led_state('bottle')
         self.publish_wheels(left_speed, right_speed)
 
