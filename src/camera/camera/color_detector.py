@@ -67,7 +67,7 @@ class ColorDetector(Node):
 
         distance_topic = os.environ.get(
             'DISTANCE_TOPIC',
-            f'/{vehicle_name}/front_center_tof_driver_node/range',
+            f'/{vehicle_name}/range',
         )
 
         self.blob_pub = self.create_publisher(
