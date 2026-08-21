@@ -14,7 +14,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import BoolMultiArray, Float32MultiArray, Header
+from std_msgs.msg import Float32MultiArray, Header, String
 
 from duckietown_msgs.msg import WheelsCmdStamped
 
@@ -70,7 +70,7 @@ class ColorDetector(Node):
             10,
         )
         self.led_pub = self.create_publisher(
-            BoolMultiArray,
+            String,
             f'/{vehicle_name}/LED_commands',
             10,
         )
@@ -108,10 +108,8 @@ class ColorDetector(Node):
         self.blob_pub.publish(msg)
 
     def publish_led_state(self, state):
-        if len(state) != 5:
-            state = list(state) + [False] * max(0, 5 - len(state))
-        msg = BoolMultiArray()
-        msg.data = [bool(v) for v in state[:5]]
+        msg = String()
+        msg.data = state
         self.led_pub.publish(msg)
 
     def publish_wheels(self, left_speed, right_speed):
@@ -144,7 +142,7 @@ class ColorDetector(Node):
     def no_color(self):
         self.publish_blob(0.0, 0.0, 0.0)
         self.publish_wheels(0.0, 0.0)
-        self.publish_led_state([False, False, False, False, False])
+        self.publish_led_state('nan')
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
@@ -161,9 +159,10 @@ class ColorDetector(Node):
 
         centered = abs(x_center_norm - SETPOINT_X) < 0.05
         if centered:
-            self.publish_led_state([True, False, False, False, False])
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
         else:
-            self.publish_led_state([False, True, False, False, False])
+            self.publish_led_state('bottle')
 
     def on_image(self, msg):
         try:
