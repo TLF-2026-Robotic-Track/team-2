@@ -21,7 +21,7 @@ if "%ROBOT%"=="" goto :norobot
 rem The folder this script sits in, for example team1.
 for %%I in ("%~dp0.") do set "REPO=%%~nxI"
 if not "%~2"=="" set "REPO=%~2"
-set "REPO=project/team-2"
+set "REPO=team-2"
 set "DEST=%~dp0images_from_%ROBOT%"
 if not exist "%DEST%" mkdir "%DEST%"
 
