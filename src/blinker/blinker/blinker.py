@@ -13,7 +13,7 @@ from std_msgs.msg import ColorRGBA
 from duckietown_msgs.msg import LEDPattern
 
 # ---- change these ----------------------------------------------------------
-PERIOD = 0.2                    # Faster period (200ms) for a strobe effect
+PERIOD = 1.0                    # Faster period (200ms) for a strobe effect
 COLORS = [
     ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0),   # red
     ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0),   # blue
