@@ -1,5 +1,4 @@
-#!/usr/bin/python3
-"""Blink the Duckiebot LEDs: red -> green -> blue, one color per second.
+"""Blink the Duckiebot LEDs: red -> blue, in a fast police strobe style.
 
 Publishes to /<VEHICLE_NAME>/led_pattern.
 """
@@ -13,10 +12,9 @@ from std_msgs.msg import ColorRGBA
 from duckietown_msgs.msg import LEDPattern
 
 # ---- change these ----------------------------------------------------------
-PERIOD = 1.0                    # seconds between color changes
+PERIOD = 0.2                    # Faster period (200ms) for a strobe effect
 COLORS = [
     ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0),   # red
-    ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0),   # green
     ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0),   # blue
 ]
 # ----------------------------------------------------------------------------
@@ -33,7 +31,7 @@ class Blinker(Node):
             LEDPattern, f'/{vehicle_name}/led_pattern', 1)
         self.index = 0
         self.timer = self.create_timer(PERIOD, self.publish_pattern)
-        self.get_logger().info(f'Blinking LEDs of {vehicle_name} every {PERIOD}s')
+        self.get_logger().info(f'Blinking police lights on {vehicle_name} every {PERIOD}s')
 
     def publish_pattern(self):
         color = COLORS[self.index % len(COLORS)]
