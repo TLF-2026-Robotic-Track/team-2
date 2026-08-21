@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """Blink the Duckiebot LEDs: red -> blue, in a fast police strobe style.
 
 Publishes to /<VEHICLE_NAME>/led_pattern.
@@ -21,7 +22,7 @@ COLORS = [
 
 # The Duckiebot has 5 LED slots, in this order:
 #   0 left front, 1 right rear, 2 right front, 3 unused, 4 left rear
-LED_COUNT = 4
+LED_COUNT = 5
 
 
 class Blinker(Node):
