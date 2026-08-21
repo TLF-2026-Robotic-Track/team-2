@@ -149,8 +149,8 @@ class ColorDetector(Node):
 
     def moving_to_color(self, x_center_norm):
         correction = self.pid(x_center_norm)
-        left_speed = BASE_SPEED + correction
-        right_speed = BASE_SPEED - correction
+        left_speed = BASE_SPEED - correction
+        right_speed = BASE_SPEED + correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
