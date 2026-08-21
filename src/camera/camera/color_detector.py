@@ -89,7 +89,6 @@ class ColorDetector(Node):
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
-        self.search_direction = 1.0
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
@@ -148,11 +147,8 @@ class ColorDetector(Node):
     def no_color(self):
         self.publish_blob(0.0, 0.0, 0.0)
         self.publish_led_state('nan')
-        self.publish_wheels(
-            SEARCH_TURN_SPEED * self.search_direction,
-            -SEARCH_TURN_SPEED * self.search_direction,
-        )
-        self.search_direction *= -1.0
+        # Search only clockwise to avoid the rapid left/right oscillation.
+        self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
