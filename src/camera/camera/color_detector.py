@@ -30,7 +30,7 @@ MAX_MOTOR_SPEED = 0.9
 SEARCH_TURN_SPEED = 0.18
 TARGET_MIN_AREA = 200
 FINISH_AREA_PERCENT = 40.0
-FAR_AREA_PERCENT = 15.0
+FAR_AREA_PERCENT = 5.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -170,8 +170,8 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        left_speed = forward_speed + turn_correction
-        right_speed = forward_speed - turn_correction
+        left_speed = forward_speed - turn_correction
+        right_speed = forward_speed + turn_correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
