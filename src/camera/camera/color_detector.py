@@ -29,7 +29,7 @@ MAX_MOTOR_SPEED = 1.0
 SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
 TARGET_MAX_AREA_PERCENT = 40.0
-RESTART_COLOR = 'blue'
+RESTART_COLOR = 'red'
 BLUE_START_DELAY_S = 2.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
@@ -43,7 +43,7 @@ COLOR_RANGES = {
         ((35, 50, 50), (90, 255, 255)),
     ],
     'blue': [
-        ((85, 35, 25), (145, 255, 255)),
+        ((95, 80, 50), (135, 255, 255)),
     ],
     'yellow': [
         ((20, 80, 80), (40, 255, 255)),
@@ -77,6 +77,11 @@ class ColorDetector(Node):
         self.led_pub = self.create_publisher(
             String,
             f'/{vehicle_name}/LED_commands',
+            10,
+        )
+        self.largest_color_pub = self.create_publisher(
+            String,
+            f'/{vehicle_name}/largest_color',
             10,
         )
         self.subscription = self.create_subscription(
@@ -127,10 +132,32 @@ class ColorDetector(Node):
             return None
         return largest
 
+    def find_largest_detected_color(self, frame):
+        largest_color = None
+        largest_contour = None
+        largest_area = 0.0
+
+        for color in COLOR_RANGES:
+            contour = self.find_largest_color(frame, color)
+            if contour is None:
+                continue
+            area = cv2.contourArea(contour)
+            if area > largest_area:
+                largest_color = color
+                largest_contour = contour
+                largest_area = area
+
+        return largest_color, largest_contour
+
     def publish_blob(self, x_center_norm, area_ratio, detected):
         msg = Float32MultiArray()
         msg.data = [float(x_center_norm), float(area_ratio), float(detected)]
         self.blob_pub.publish(msg)
+
+    def publish_largest_color(self, color):
+        msg = String()
+        msg.data = color if color is not None else 'nan'
+        self.largest_color_pub.publish(msg)
 
     def publish_led_state(self, state):
         msg = String()
@@ -237,9 +264,11 @@ class ColorDetector(Node):
             self.no_color()
             return
 
+        largest_color, largest_contour = self.find_largest_detected_color(frame)
+        self.publish_largest_color(largest_color)
+
         if self.waiting_for_blue:
-            blue_contour = self.find_largest_color(frame, RESTART_COLOR)
-            if blue_contour is None:
+            if largest_color != RESTART_COLOR:
                 self.publish_led_state('finished')
                 self.publish_wheels(0.0, 0.0)
                 return
@@ -258,11 +287,11 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        largest = self.find_largest_color(frame, TARGET_COLOR)
-        if largest is None:
+        if largest_color != TARGET_COLOR or largest_contour is None:
             self.no_color()
             return
 
+        largest = largest_contour
         x, y, w, h = cv2.boundingRect(largest)
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
