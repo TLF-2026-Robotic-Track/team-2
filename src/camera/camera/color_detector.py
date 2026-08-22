@@ -25,13 +25,15 @@ D = 0.25
 SETPOINT_X = 0.5
 CENTER_TOLERANCE = 0.05
 BASE_SPEED = 0.50
-MAX_MOTOR_SPEED = 1.0
+MAX_MOTOR_SPEED = 0.8
 SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
 TARGET_MAX_AREA_PERCENT = 20.0
-RESTART_COLOR = 'red'
-BLUE_START_DELAY_S = 2.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
+RESTART_COLOR = 'blue'
+RESTART_MIN_AREA = 200
+RESTART_CENTER_TOLERANCE = 0.25
+BLUE_START_DELAY_S = 2.0
 # ----------------------------------------------------------------------------
 
 COLOR_RANGES = {
@@ -148,6 +150,28 @@ class ColorDetector(Node):
                 largest_area = area
 
         return largest_color, largest_contour
+
+    def is_restart_key(self, frame):
+        blue_contour = self.find_largest_color(frame, RESTART_COLOR)
+        if blue_contour is None:
+            return False
+
+        blue_area = cv2.contourArea(blue_contour)
+        if blue_area < RESTART_MIN_AREA:
+            return False
+
+        blue_x, _, blue_width, _ = cv2.boundingRect(blue_contour)
+        blue_center_x = blue_x + blue_width / 2.0
+        center_x = frame.shape[1] / 2.0
+        center_error = abs(blue_center_x - center_x) / max(frame.shape[1], 1)
+        if center_error > RESTART_CENTER_TOLERANCE:
+            return False
+
+        _, largest_contour = self.find_largest_detected_color(frame)
+        return (
+            largest_contour is not None
+            and blue_area >= cv2.contourArea(largest_contour)
+        )
 
     def publish_blob(self, x_center_norm, area_ratio, detected):
         msg = Float32MultiArray()
@@ -268,7 +292,7 @@ class ColorDetector(Node):
         self.publish_largest_color(largest_color)
 
         if self.waiting_for_blue:
-            if largest_color != RESTART_COLOR:
+            if not self.is_restart_key(frame):
                 self.publish_led_state('finished')
                 self.publish_wheels(0.0, 0.0)
                 return
@@ -287,11 +311,11 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        if largest_color != TARGET_COLOR or largest_contour is None:
+        largest = self.find_largest_color(frame, TARGET_COLOR)
+        if largest is None:
             self.no_color()
             return
 
-        largest = largest_contour
         x, y, w, h = cv2.boundingRect(largest)
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
