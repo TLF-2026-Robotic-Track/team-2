@@ -239,8 +239,8 @@ class ColorDetector(Node):
             turn_correction = self.pid(x_center_norm)
 
         # Drive at maximum speed and reduce the wheel on the side of the turn.
-        left_speed = MAX_MOTOR_SPEED - max(0.0, turn_correction)
-        right_speed = MAX_MOTOR_SPEED - max(0.0, -turn_correction)
+        left_speed = MAX_MOTOR_SPEED - max(0.0, -turn_correction)
+        right_speed = MAX_MOTOR_SPEED - max(0.0, turn_correction)
 
         left_speed = max(0.0, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(0.0, min(MAX_MOTOR_SPEED, right_speed))
