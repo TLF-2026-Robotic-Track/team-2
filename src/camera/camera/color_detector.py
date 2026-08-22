@@ -20,7 +20,7 @@ from std_msgs.msg import Float32MultiArray, Header, String
 from duckietown_msgs.msg import WheelsCmdStamped
 
 # ---- PID and motion tuning ---------------------------------------------------
-P = 1.0
+P = 1.5
 I = 0.05
 D = 0.25
 SETPOINT_X = 0.5
