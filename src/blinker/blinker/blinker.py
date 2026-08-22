@@ -15,6 +15,7 @@ from duckietown_msgs.msg import LEDPattern
 # ---- LED states ------------------------------------------------------------
 no_event = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
 color_detected = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
+blue_key_seen = ColorRGBA(r=1.0, g=1.0, b=0.0, a=1.0)
 on_finish = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.0)
 # ----------------------------------------------------------------------------
 topic_name = 'LED_commands'
@@ -46,6 +47,12 @@ class Blinker(Node):
         elif event == 'bottle':
             self.publish_color(color_detected)
             self.get_logger().info(f'Event received: {msg.data}; LEDs set to red')
+
+        elif event == 'blue':
+            self.publish_color(blue_key_seen)
+            self.get_logger().info(
+                f'Event received: {msg.data}; LEDs set to yellow while waiting'
+            )
 
         elif event == 'finished':
             self.publish_color(on_finish)

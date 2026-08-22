@@ -7,14 +7,13 @@ inverse PID output. If no target is found, both motors stop.
 """
 
 import os
-import math
 
 import cv2
 import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage, Range
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Float32MultiArray, Header, String
 
 from duckietown_msgs.msg import WheelsCmdStamped
@@ -29,9 +28,9 @@ BASE_SPEED = 0.50
 MAX_MOTOR_SPEED = 1.0
 SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
-STOP_DISTANCE_M = 0.2
 TARGET_MAX_AREA_PERCENT = 40.0
 RESTART_COLOR = 'blue'
+BLUE_START_DELAY_S = 2.0
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -65,11 +64,6 @@ class ColorDetector(Node):
     def __init__(self, vehicle_name):
         super().__init__('color_detector')
 
-        distance_topic = os.environ.get(
-            'DISTANCE_TOPIC',
-            f'/{vehicle_name}/range',
-        )
-
         self.blob_pub = self.create_publisher(
             Float32MultiArray,
             f'/{vehicle_name}/color_blob',
@@ -91,29 +85,17 @@ class ColorDetector(Node):
             self.on_image,
             10,
         )
-        self.distance_subscription = self.create_subscription(
-            Range,
-            distance_topic,
-            self.on_distance,
-            10,
-        )
-
         self.last_error = 0.0
         self.integral = 0.0
         self.last_time = None
-        self.distance_m = None
-        self.distance_blocked = False
         self.waiting_for_blue = False
-        self.waiting_for_distance_clear = False
-        self.distance_safety_timer = self.create_timer(
-            0.05,
-            self.enforce_distance_stop,
-        )
+        self.blue_start_time = None
+        self.blue_start_timer = self.create_timer(0.05, self.check_blue_start)
 
         self.get_logger().info(
             f'Detecting {TARGET_COLOR} blobs on {vehicle_name}; '
             f'P={P}, I={I}, D={D}, base speed={BASE_SPEED}, '
-            f'stop distance={STOP_DISTANCE_M}m, distance topic={distance_topic}'
+            f'blue start delay={BLUE_START_DELAY_S}s'
         )
 
     def _build_mask(self, hsv_image, color=TARGET_COLOR):
@@ -155,10 +137,6 @@ class ColorDetector(Node):
         self.led_pub.publish(msg)
 
     def publish_wheels(self, left_speed, right_speed):
-        if self.distance_is_close():
-            left_speed = 0.0
-            right_speed = 0.0
-
         msg = WheelsCmdStamped()
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
@@ -168,33 +146,21 @@ class ColorDetector(Node):
         msg.vel_right = float(right_speed)
         self.wheels_pub.publish(msg)
 
-    def on_distance(self, msg):
-        self.distance_m = msg.range
-        if self.distance_is_close():
-            self.distance_blocked = True
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
-        elif self.waiting_for_distance_clear:
-            self.waiting_for_distance_clear = False
-            self.distance_blocked = False
-            self.publish_led_state('nan')
-            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
-        elif self.distance_blocked and not self.waiting_for_blue:
-            self.distance_blocked = False
-            self.publish_led_state('nan')
-            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
+    def start_search(self, reason):
+        self.blue_start_time = None
+        self.publish_led_state('nan')
+        self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
+        self.get_logger().info(f'Starting clockwise bottle search: {reason}')
 
-    def distance_is_close(self):
-        return (
-            self.distance_m is not None
-            and math.isfinite(self.distance_m)
-            and self.distance_m <= STOP_DISTANCE_M
-        )
-
-    def enforce_distance_stop(self):
-        if self.distance_is_close():
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
+    def check_blue_start(self):
+        if self.blue_start_time is not None:
+            now = self.get_clock().now().nanoseconds * 1e-9
+            if now - self.blue_start_time >= BLUE_START_DELAY_S:
+                self.waiting_for_blue = False
+                self.start_search('2 seconds after blue key')
+            else:
+                self.publish_led_state('blue')
+                self.publish_wheels(0.0, 0.0)
 
     def pid(self, x_center_norm):
         # Positive error means the target is to the right.
@@ -215,12 +181,7 @@ class ColorDetector(Node):
         return output
 
     def no_color(self):
-        if self.distance_is_close():
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
-            return
-
-        if self.waiting_for_blue or self.waiting_for_distance_clear or self.distance_blocked:
+        if self.waiting_for_blue or self.blue_start_time is not None:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
@@ -235,15 +196,10 @@ class ColorDetector(Node):
 
     def bottle_found(self):
         self.waiting_for_blue = True
-        self.distance_blocked = True
         self.publish_led_state('finished')
         self.publish_wheels(0.0, 0.0)
 
     def move_toward_bottle(self, x_center_norm):
-        if self.distance_is_close():
-            self.bottle_found()
-            return
-
         if self.waiting_for_blue:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
@@ -279,19 +235,20 @@ class ColorDetector(Node):
 
         if self.waiting_for_blue:
             blue_contour = self.find_largest_color(frame, RESTART_COLOR)
-            if blue_contour is None or not self.distance_is_close():
+            if blue_contour is None:
                 self.publish_led_state('finished')
                 self.publish_wheels(0.0, 0.0)
                 return
 
-            # Blue is the ignition key. Keep stopped until the ToF sensor clears.
+            # Blue is the ignition key. Keep stopped for the configured delay.
             self.waiting_for_blue = False
-            self.waiting_for_distance_clear = True
-            self.publish_led_state('finished')
+            self.blue_start_time = self.get_clock().now().nanoseconds * 1e-9
+            self.get_logger().info('Blue ignition detected; waiting 2 seconds')
+            self.publish_led_state('blue')
             self.publish_wheels(0.0, 0.0)
             return
 
-        if self.waiting_for_distance_clear:
+        if self.blue_start_time is not None:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
@@ -309,10 +266,6 @@ class ColorDetector(Node):
         area_ratio = area_px / image_area
 
         self.publish_blob(x_center_norm, area_ratio, 1.0)
-
-        if self.distance_is_close():
-            self.bottle_found()
-            return
 
         if area_ratio * 100.0 >= TARGET_MAX_AREA_PERCENT:
             self.bottle_found()
