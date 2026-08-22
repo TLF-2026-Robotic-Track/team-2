@@ -29,7 +29,7 @@ BASE_SPEED = 0.50
 MAX_MOTOR_SPEED = 1.0
 SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
-STOP_DISTANCE_M = 0.15
+STOP_DISTANCE_M = 0.2
 TARGET_MAX_AREA_PERCENT = 40.0
 RESTART_COLOR = 'blue'
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
@@ -44,7 +44,7 @@ COLOR_RANGES = {
         ((35, 50, 50), (90, 255, 255)),
     ],
     'blue': [
-        ((100, 80, 80), (140, 255, 255)),
+        ((85, 35, 25), (145, 255, 255)),
     ],
     'yellow': [
         ((20, 80, 80), (40, 255, 255)),
@@ -102,6 +102,7 @@ class ColorDetector(Node):
         self.integral = 0.0
         self.last_time = None
         self.distance_m = None
+        self.distance_blocked = False
         self.waiting_for_blue = False
         self.waiting_for_distance_clear = False
         self.distance_safety_timer = self.create_timer(
@@ -170,12 +171,16 @@ class ColorDetector(Node):
     def on_distance(self, msg):
         self.distance_m = msg.range
         if self.distance_is_close():
-            self.waiting_for_blue = True
-            self.waiting_for_distance_clear = False
+            self.distance_blocked = True
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
         elif self.waiting_for_distance_clear:
             self.waiting_for_distance_clear = False
+            self.distance_blocked = False
+            self.publish_led_state('nan')
+            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
+        elif self.distance_blocked and not self.waiting_for_blue:
+            self.distance_blocked = False
             self.publish_led_state('nan')
             self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
 
@@ -215,7 +220,7 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        if self.waiting_for_blue or self.waiting_for_distance_clear:
+        if self.waiting_for_blue or self.waiting_for_distance_clear or self.distance_blocked:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
@@ -230,11 +235,16 @@ class ColorDetector(Node):
 
     def bottle_found(self):
         self.waiting_for_blue = True
+        self.distance_blocked = True
         self.publish_led_state('finished')
         self.publish_wheels(0.0, 0.0)
 
     def move_toward_bottle(self, x_center_norm):
-        if self.distance_is_close() or self.waiting_for_blue:
+        if self.distance_is_close():
+            self.bottle_found()
+            return
+
+        if self.waiting_for_blue:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
@@ -274,6 +284,7 @@ class ColorDetector(Node):
                 self.publish_wheels(0.0, 0.0)
                 return
 
+            # Blue is the ignition key. Keep stopped until the ToF sensor clears.
             self.waiting_for_blue = False
             self.waiting_for_distance_clear = True
             self.publish_led_state('finished')
@@ -300,8 +311,7 @@ class ColorDetector(Node):
         self.publish_blob(x_center_norm, area_ratio, 1.0)
 
         if self.distance_is_close():
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
+            self.bottle_found()
             return
 
         if area_ratio * 100.0 >= TARGET_MAX_AREA_PERCENT:
