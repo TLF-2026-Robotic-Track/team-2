@@ -103,6 +103,7 @@ class ColorDetector(Node):
         self.last_time = None
         self.distance_m = None
         self.waiting_for_blue = False
+        self.waiting_for_distance_clear = False
         self.distance_safety_timer = self.create_timer(
             0.05,
             self.enforce_distance_stop,
@@ -170,8 +171,13 @@ class ColorDetector(Node):
         self.distance_m = msg.range
         if self.distance_is_close():
             self.waiting_for_blue = True
+            self.waiting_for_distance_clear = False
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
+        elif self.waiting_for_distance_clear:
+            self.waiting_for_distance_clear = False
+            self.publish_led_state('nan')
+            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
 
     def distance_is_close(self):
         return (
@@ -209,7 +215,7 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        if self.waiting_for_blue:
+        if self.waiting_for_blue or self.waiting_for_distance_clear:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
@@ -263,14 +269,20 @@ class ColorDetector(Node):
 
         if self.waiting_for_blue:
             blue_contour = self.find_largest_color(frame, RESTART_COLOR)
-            if blue_contour is None:
+            if blue_contour is None or not self.distance_is_close():
                 self.publish_led_state('finished')
                 self.publish_wheels(0.0, 0.0)
                 return
 
             self.waiting_for_blue = False
-            self.publish_led_state('nan')
-            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
+            self.waiting_for_distance_clear = True
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+            return
+
+        if self.waiting_for_distance_clear:
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
             return
 
         largest = self.find_largest_color(frame, TARGET_COLOR)
