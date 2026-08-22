@@ -234,8 +234,8 @@ class ColorDetector(Node):
             right_speed = MAX_MOTOR_SPEED
         else:
             # Right target: reduce left speed. Left target: reduce right speed.
-            left_speed = MAX_MOTOR_SPEED - turn_correction
-            right_speed = MAX_MOTOR_SPEED + turn_correction
+            left_speed = MAX_MOTOR_SPEED + turn_correction
+            right_speed = MAX_MOTOR_SPEED - turn_correction
 
         left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
         right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
