@@ -15,7 +15,7 @@ from duckietown_msgs.msg import LEDPattern
 # ---- LED states ------------------------------------------------------------
 no_event = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
 color_detected = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
-on_finish = ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0)
+on_finish = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0)
 # ----------------------------------------------------------------------------
 topic_name = 'LED_commands'
 # The Duckiebot has 5 LED slots, in this order:
