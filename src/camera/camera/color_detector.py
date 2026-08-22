@@ -20,16 +20,16 @@ from std_msgs.msg import Float32MultiArray, Header, String
 from duckietown_msgs.msg import WheelsCmdStamped
 
 # ---- PID and motion tuning ---------------------------------------------------
-P = 1.75
+P = 1.6
 I = 0.05
-D = 0.5
+D = 0.25
 SETPOINT_X = 0.5
 CENTER_TOLERANCE = 0.05
 BASE_SPEED = 0.50
 MAX_MOTOR_SPEED = 1.0
-SEARCH_TURN_SPEED = 0.70
+SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
-STOP_DISTANCE_M = 0.30
+STOP_DISTANCE_M = 0.15
 TARGET_MAX_AREA_PERCENT = 40.0
 FORWARD_PULSE_PERIOD_S = 3.0
 FORWARD_PULSE_DURATION_S = 0.25
