@@ -31,8 +31,7 @@ SEARCH_TURN_SPEED = 0.60
 TARGET_MIN_AREA = 200
 STOP_DISTANCE_M = 0.15
 TARGET_MAX_AREA_PERCENT = 40.0
-FORWARD_PULSE_PERIOD_S = 3.0
-FORWARD_PULSE_DURATION_S = 0.25
+RESTART_COLOR = 'blue'
 TARGET_COLOR = os.environ.get('TARGET_COLOR', 'green').lower()
 # ----------------------------------------------------------------------------
 
@@ -103,12 +102,7 @@ class ColorDetector(Node):
         self.integral = 0.0
         self.last_time = None
         self.distance_m = None
-        self.finished_latched = False
-        self.forward_pulse_until = 0.0
-        self.forward_pulse_timer = self.create_timer(
-            FORWARD_PULSE_PERIOD_S,
-            self.start_forward_pulse,
-        )
+        self.waiting_for_blue = False
         self.distance_safety_timer = self.create_timer(
             0.05,
             self.enforce_distance_stop,
@@ -120,9 +114,9 @@ class ColorDetector(Node):
             f'stop distance={STOP_DISTANCE_M}m, distance topic={distance_topic}'
         )
 
-    def _build_mask(self, hsv_image):
+    def _build_mask(self, hsv_image, color=TARGET_COLOR):
         mask = np.zeros(hsv_image.shape[:2], dtype=np.uint8)
-        for lower, upper in COLOR_RANGES[TARGET_COLOR]:
+        for lower, upper in COLOR_RANGES[color]:
             lower_hsv = np.array(lower, dtype=np.uint8)
             upper_hsv = np.array(upper, dtype=np.uint8)
             mask |= cv2.inRange(hsv_image, lower_hsv, upper_hsv)
@@ -131,6 +125,22 @@ class ColorDetector(Node):
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         return mask
+
+    def find_largest_color(self, frame, color):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = self._build_mask(hsv, color)
+        contours, _ = cv2.findContours(
+            mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        if not contours:
+            return None
+
+        largest = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(largest) < TARGET_MIN_AREA:
+            return None
+        return largest
 
     def publish_blob(self, x_center_norm, area_ratio, detected):
         msg = Float32MultiArray()
@@ -159,8 +169,7 @@ class ColorDetector(Node):
     def on_distance(self, msg):
         self.distance_m = msg.range
         if self.distance_is_close():
-            self.finished_latched = True
-            self.forward_pulse_until = 0.0
+            self.waiting_for_blue = True
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
 
@@ -173,14 +182,8 @@ class ColorDetector(Node):
 
     def enforce_distance_stop(self):
         if self.distance_is_close():
-            self.forward_pulse_until = 0.0
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
-
-    def start_forward_pulse(self):
-        if not self.distance_is_close():
-            now = self.get_clock().now().nanoseconds * 1e-9
-            self.forward_pulse_until = now + FORWARD_PULSE_DURATION_S
 
     def pid(self, x_center_norm):
         # Positive error means the target is to the right.
@@ -206,8 +209,10 @@ class ColorDetector(Node):
             self.publish_wheels(0.0, 0.0)
             return
 
-        # No visible target means camera coverage is below the release limit.
-        self.finished_latched = False
+        if self.waiting_for_blue:
+            self.publish_led_state('finished')
+            self.publish_wheels(0.0, 0.0)
+            return
 
         self.publish_blob(0.0, 0.0, 0.0)
         self.publish_led_state('nan')
@@ -217,28 +222,28 @@ class ColorDetector(Node):
         self.integral = 0.0
         self.last_time = None
 
-    def moving_to_color(self, x_center_norm):
-        if self.distance_is_close() or self.finished_latched:
+    def bottle_found(self):
+        self.waiting_for_blue = True
+        self.publish_led_state('finished')
+        self.publish_wheels(0.0, 0.0)
+
+    def move_toward_bottle(self, x_center_norm):
+        if self.distance_is_close() or self.waiting_for_blue:
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
 
-        error = SETPOINT_X - x_center_norm
+        error = x_center_norm - SETPOINT_X
         turn_correction = 0.0
         if abs(error) > CENTER_TOLERANCE:
             turn_correction = self.pid(x_center_norm)
 
-        now = self.get_clock().now().nanoseconds * 1e-9
-        if now < self.forward_pulse_until:
-            left_speed = MAX_MOTOR_SPEED
-            right_speed = MAX_MOTOR_SPEED
-        else:
-            # Right target: reduce left speed. Left target: reduce right speed.
-            left_speed = MAX_MOTOR_SPEED + turn_correction
-            right_speed = MAX_MOTOR_SPEED - turn_correction
+        # Drive at maximum speed and reduce the wheel on the side of the turn.
+        left_speed = MAX_MOTOR_SPEED - max(0.0, turn_correction)
+        right_speed = MAX_MOTOR_SPEED - max(0.0, -turn_correction)
 
-        left_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, left_speed))
-        right_speed = max(-MAX_MOTOR_SPEED, min(MAX_MOTOR_SPEED, right_speed))
+        left_speed = max(0.0, min(MAX_MOTOR_SPEED, left_speed))
+        right_speed = max(0.0, min(MAX_MOTOR_SPEED, right_speed))
 
         self.publish_led_state('bottle')
         self.publish_wheels(left_speed, right_speed)
@@ -256,51 +261,42 @@ class ColorDetector(Node):
             self.no_color()
             return
 
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = self._build_mask(hsv)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if self.waiting_for_blue:
+            blue_contour = self.find_largest_color(frame, RESTART_COLOR)
+            if blue_contour is None:
+                self.publish_led_state('finished')
+                self.publish_wheels(0.0, 0.0)
+                return
 
-        if not contours:
-            self.no_color()
+            self.waiting_for_blue = False
+            self.publish_led_state('nan')
+            self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
             return
 
-        largest = max(contours, key=cv2.contourArea)
-        area_px = cv2.contourArea(largest)
-        image_area = max(frame.shape[0] * frame.shape[1], 1)
-
-        if area_px < TARGET_MIN_AREA:
+        largest = self.find_largest_color(frame, TARGET_COLOR)
+        if largest is None:
             self.no_color()
             return
 
         x, y, w, h = cv2.boundingRect(largest)
         x_center = x + w / 2.0
         x_center_norm = x_center / max(frame.shape[1], 1)
+        area_px = cv2.contourArea(largest)
+        image_area = max(frame.shape[0] * frame.shape[1], 1)
         area_ratio = area_px / image_area
-        area_percent = area_ratio * 100.0
 
         self.publish_blob(x_center_norm, area_ratio, 1.0)
 
         if self.distance_is_close():
-            self.finished_latched = True
-            self.forward_pulse_until = 0.0
             self.publish_led_state('finished')
             self.publish_wheels(0.0, 0.0)
             return
 
-        if area_percent >= TARGET_MAX_AREA_PERCENT:
-            self.finished_latched = True
-            self.publish_led_state('finished')
-            self.publish_wheels(0.0, 0.0)
+        if area_ratio * 100.0 >= TARGET_MAX_AREA_PERCENT:
+            self.bottle_found()
             return
 
-        if self.finished_latched:
-            if self.distance_is_close() or area_percent >= TARGET_MAX_AREA_PERCENT:
-                self.publish_led_state('finished')
-                self.publish_wheels(0.0, 0.0)
-                return
-            self.finished_latched = False
-
-        self.moving_to_color(x_center_norm)
+        self.move_toward_bottle(x_center_norm)
 
 
 def main():
