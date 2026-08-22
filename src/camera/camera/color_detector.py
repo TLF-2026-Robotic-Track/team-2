@@ -90,6 +90,7 @@ class ColorDetector(Node):
         self.last_time = None
         self.waiting_for_blue = False
         self.blue_start_time = None
+        self.blue_event_sent = False
         self.blue_start_timer = self.create_timer(0.05, self.check_blue_start)
 
         self.get_logger().info(
@@ -148,6 +149,7 @@ class ColorDetector(Node):
 
     def start_search(self, reason):
         self.blue_start_time = None
+        self.blue_event_sent = False
         self.publish_led_state('nan')
         self.publish_wheels(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED)
         self.get_logger().info(f'Starting clockwise bottle search: {reason}')
@@ -159,7 +161,9 @@ class ColorDetector(Node):
                 self.waiting_for_blue = False
                 self.start_search('2 seconds after blue key')
             else:
-                self.publish_led_state('blue')
+                if not self.blue_event_sent:
+                    self.publish_led_state('blue')
+                    self.blue_event_sent = True
                 self.publish_wheels(0.0, 0.0)
 
     def pid(self, x_center_norm):
@@ -243,13 +247,14 @@ class ColorDetector(Node):
             # Blue is the ignition key. Keep stopped for the configured delay.
             self.waiting_for_blue = False
             self.blue_start_time = self.get_clock().now().nanoseconds * 1e-9
+            self.blue_event_sent = False
             self.get_logger().info('Blue ignition detected; waiting 2 seconds')
             self.publish_led_state('blue')
             self.publish_wheels(0.0, 0.0)
             return
 
         if self.blue_start_time is not None:
-            self.publish_led_state('finished')
+            self.publish_led_state('blue')
             self.publish_wheels(0.0, 0.0)
             return
 
